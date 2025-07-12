@@ -1,12 +1,12 @@
-// Dental Patient Management System
-class DentalPatientManager {
+// Dental Visit Records Management System
+class DentalVisitManager {
     constructor() {
-        this.patients = JSON.parse(localStorage.getItem('dentalPatients')) || [];
-        this.currentPatientId = null;
-        this.filteredPatients = [...this.patients];
+        this.visits = JSON.parse(localStorage.getItem('dentalVisits')) || [];
+        this.currentVisitId = null;
+        this.filteredVisits = [...this.visits];
         
         this.initializeEventListeners();
-        this.renderPatients();
+        this.renderVisits();
         this.updateStats();
         this.loadSampleData();
     }
@@ -20,6 +20,10 @@ class DentalPatientManager {
 
         // Form submission
         document.getElementById('patientForm').addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Price calculation
+        document.getElementById('price').addEventListener('input', () => this.calculateFinalPrice());
+        document.getElementById('discount').addEventListener('input', () => this.calculateFinalPrice());
 
         // Search and filter
         document.getElementById('searchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
@@ -47,8 +51,18 @@ class DentalPatientManager {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }
 
-    getInitials(firstName, lastName) {
-        return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
+    calculateFinalPrice() {
+        const price = parseFloat(document.getElementById('price').value) || 0;
+        const discount = parseFloat(document.getElementById('discount').value) || 0;
+        const finalPrice = Math.max(0, price - discount);
+        document.getElementById('finalPrice').value = finalPrice.toFixed(2);
+    }
+
+    formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(amount);
     }
 
     formatDate(dateString) {
@@ -83,198 +97,185 @@ class DentalPatientManager {
         return age;
     }
 
-    openModal(patientId = null) {
+    openModal(visitId = null) {
         const modal = document.getElementById('patientModal');
         const modalTitle = document.getElementById('modalTitle');
         const form = document.getElementById('patientForm');
 
-        if (patientId) {
+        if (visitId) {
             // Edit mode
-            this.currentPatientId = patientId;
-            const patient = this.patients.find(p => p.id === patientId);
-            if (patient) {
-                modalTitle.textContent = 'Edit Patient';
-                this.populateForm(patient);
+            this.currentVisitId = visitId;
+            const visit = this.visits.find(v => v.id === visitId);
+            if (visit) {
+                modalTitle.textContent = 'Edit Visit Record';
+                this.populateForm(visit);
             }
         } else {
             // Add mode
-            this.currentPatientId = null;
-            modalTitle.textContent = 'Add New Patient';
+            this.currentVisitId = null;
+            modalTitle.textContent = 'Add New Visit Record';
             form.reset();
+            // Set today's date as default
+            document.getElementById('visitDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('discount').value = '0';
+            document.getElementById('finalPrice').value = '0.00';
         }
 
         modal.classList.add('active');
-        document.getElementById('firstName').focus();
+        document.getElementById('visitDate').focus();
     }
 
     closeModal() {
         document.getElementById('patientModal').classList.remove('active');
         document.getElementById('patientForm').reset();
-        this.currentPatientId = null;
+        this.currentVisitId = null;
     }
 
     closeDetailsModal() {
         document.getElementById('detailsModal').classList.remove('active');
     }
 
-    populateForm(patient) {
+    populateForm(visit) {
         const form = document.getElementById('patientForm');
-        form.firstName.value = patient.firstName;
-        form.lastName.value = patient.lastName;
-        form.dateOfBirth.value = patient.dateOfBirth;
-        form.phone.value = patient.phone;
-        form.email.value = patient.email || '';
-        form.address.value = patient.address || '';
-        form.medicalHistory.value = patient.medicalHistory || '';
-        form.insuranceProvider.value = patient.insuranceProvider || '';
-        form.insuranceNumber.value = patient.insuranceNumber || '';
+        form.visitDate.value = visit.visitDate;
+        form.patientName.value = visit.patientName;
+        form.fileNumber.value = visit.fileNumber;
+        form.patientType.value = visit.patientType;
+        form.procedure.value = visit.procedure;
+        form.price.value = visit.price;
+        form.discount.value = visit.discount || '0';
+        form.finalPrice.value = visit.finalPrice;
+        form.notes.value = visit.notes || '';
     }
 
     handleFormSubmit(e) {
         e.preventDefault();
         const formData = new FormData(e.target);
-        const patientData = {
-            firstName: formData.get('firstName').trim(),
-            lastName: formData.get('lastName').trim(),
-            dateOfBirth: formData.get('dateOfBirth'),
-            phone: formData.get('phone').trim(),
-            email: formData.get('email').trim(),
-            address: formData.get('address').trim(),
-            medicalHistory: formData.get('medicalHistory').trim(),
-            insuranceProvider: formData.get('insuranceProvider').trim(),
-            insuranceNumber: formData.get('insuranceNumber').trim(),
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            lastVisit: null,
-            nextAppointment: null
+        const visitData = {
+            visitDate: formData.get('visitDate'),
+            patientName: formData.get('patientName').trim(),
+            fileNumber: formData.get('fileNumber').trim(),
+            patientType: formData.get('patientType'),
+            procedure: formData.get('procedure').trim(),
+            price: parseFloat(formData.get('price')),
+            discount: parseFloat(formData.get('discount')) || 0,
+            finalPrice: parseFloat(formData.get('finalPrice')),
+            notes: formData.get('notes').trim(),
+            createdAt: new Date().toISOString()
         };
 
-        if (this.currentPatientId) {
-            // Update existing patient
-            const index = this.patients.findIndex(p => p.id === this.currentPatientId);
+        if (this.currentVisitId) {
+            // Update existing visit
+            const index = this.visits.findIndex(v => v.id === this.currentVisitId);
             if (index !== -1) {
-                this.patients[index] = { ...this.patients[index], ...patientData };
-                this.showToast('Patient updated successfully!', 'success');
+                this.visits[index] = { ...this.visits[index], ...visitData };
+                this.showToast('Visit record updated successfully!', 'success');
             }
         } else {
-            // Add new patient
-            patientData.id = this.generateId();
-            this.patients.push(patientData);
-            this.showToast('Patient added successfully!', 'success');
+            // Add new visit
+            visitData.id = this.generateId();
+            this.visits.push(visitData);
+            this.showToast('Visit record added successfully!', 'success');
         }
 
         this.saveToLocalStorage();
-        this.renderPatients();
+        this.renderVisits();
         this.updateStats();
         this.closeModal();
     }
 
-    deletePatient(patientId) {
-        if (confirm('Are you sure you want to delete this patient? This action cannot be undone.')) {
-            this.patients = this.patients.filter(p => p.id !== patientId);
+    deleteVisit(visitId) {
+        if (confirm('Are you sure you want to delete this visit record? This action cannot be undone.')) {
+            this.visits = this.visits.filter(v => v.id !== visitId);
             this.saveToLocalStorage();
-            this.renderPatients();
+            this.renderVisits();
             this.updateStats();
-            this.showToast('Patient deleted successfully!', 'success');
+            this.showToast('Visit record deleted successfully!', 'success');
         }
     }
 
-    viewPatientDetails(patientId) {
-        const patient = this.patients.find(p => p.id === patientId);
-        if (!patient) return;
+    viewVisitDetails(visitId) {
+        const visit = this.visits.find(v => v.id === visitId);
+        if (!visit) return;
 
         const detailsContent = document.getElementById('patientDetailsContent');
-        detailsContent.innerHTML = this.generatePatientDetailsHTML(patient);
+        detailsContent.innerHTML = this.generateVisitDetailsHTML(visit);
         
         document.getElementById('detailsModal').classList.add('active');
     }
 
-    generatePatientDetailsHTML(patient) {
-        const age = this.calculateAge(patient.dateOfBirth);
-        const formattedPhone = this.formatPhone(patient.phone);
-        const formattedLastVisit = this.formatDate(patient.lastVisit);
-        const formattedNextAppointment = this.formatDate(patient.nextAppointment);
+    generateVisitDetailsHTML(visit) {
+        const formattedVisitDate = this.formatDate(visit.visitDate);
+        const formattedPrice = this.formatCurrency(visit.price);
+        const formattedDiscount = this.formatCurrency(visit.discount);
+        const formattedFinalPrice = this.formatCurrency(visit.finalPrice);
 
         return `
             <div class="detail-section">
-                <h3>Personal Information</h3>
+                <h3>Visit Information</h3>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <label>Full Name</label>
-                        <span>${patient.firstName} ${patient.lastName}</span>
+                        <label>Visit Date</label>
+                        <span>${formattedVisitDate}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Date of Birth</label>
-                        <span>${this.formatDate(patient.dateOfBirth)} (${age} years old)</span>
+                        <label>Patient Name</label>
+                        <span>${visit.patientName}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Phone</label>
-                        <span>${formattedPhone}</span>
+                        <label>File Number</label>
+                        <span>${visit.fileNumber}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Email</label>
-                        <span>${patient.email || 'N/A'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Address</label>
-                        <span>${patient.address || 'N/A'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Status</label>
-                        <span class="status-badge status-${patient.status}">
-                            <i class="fas fa-${patient.status === 'active' ? 'check-circle' : 'times-circle'}"></i>
-                            ${patient.status.charAt(0).toUpperCase() + patient.status.slice(1)}
+                        <label>Patient Type</label>
+                        <span class="status-badge status-${visit.patientType}">
+                            <i class="fas fa-${visit.patientType === 'cash' ? 'money-bill' : 'shield-alt'}"></i>
+                            ${visit.patientType.charAt(0).toUpperCase() + visit.patientType.slice(1)}
                         </span>
                     </div>
                 </div>
             </div>
 
             <div class="detail-section">
-                <h3>Medical Information</h3>
+                <h3>Treatment Details</h3>
                 <div class="detail-grid">
                     <div class="detail-item full-width">
-                        <label>Medical History</label>
-                        <span>${patient.medicalHistory || 'No medical history recorded'}</span>
+                        <label>Procedure</label>
+                        <span>${visit.procedure}</span>
+                    </div>
+                    <div class="detail-item full-width">
+                        <label>Notes/Remarks</label>
+                        <span>${visit.notes || 'No notes recorded'}</span>
                     </div>
                 </div>
             </div>
 
             <div class="detail-section">
-                <h3>Insurance Information</h3>
+                <h3>Financial Information</h3>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <label>Insurance Provider</label>
-                        <span>${patient.insuranceProvider || 'N/A'}</span>
+                        <label>Original Price</label>
+                        <span>${formattedPrice}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Insurance Number</label>
-                        <span>${patient.insuranceNumber || 'N/A'}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="detail-section">
-                <h3>Appointment History</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <label>Last Visit</label>
-                        <span>${formattedLastVisit}</span>
+                        <label>Discount</label>
+                        <span>${formattedDiscount}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Next Appointment</label>
-                        <span>${formattedNextAppointment}</span>
+                        <label>Final Price</label>
+                        <span style="font-weight: 700; color: var(--primary-color);">${formattedFinalPrice}</span>
                     </div>
                     <div class="detail-item">
-                        <label>Member Since</label>
-                        <span>${this.formatDate(patient.createdAt)}</span>
+                        <label>Record Created</label>
+                        <span>${this.formatDate(visit.createdAt)}</span>
                     </div>
                 </div>
             </div>
 
             <div class="form-actions">
-                <button class="btn btn-secondary" onclick="patientManager.closeDetailsModal()">Close</button>
-                <button class="btn btn-primary" onclick="patientManager.openModal('${patient.id}')">
-                    <i class="fas fa-edit"></i> Edit Patient
+                <button class="btn btn-secondary" onclick="visitManager.closeDetailsModal()">Close</button>
+                <button class="btn btn-primary" onclick="visitManager.openModal('${visit.id}')">
+                    <i class="fas fa-edit"></i> Edit Visit Record
                 </button>
             </div>
         `;
@@ -284,71 +285,66 @@ class DentalPatientManager {
         const searchTerm = query.toLowerCase().trim();
         
         if (!searchTerm) {
-            this.filteredPatients = [...this.patients];
+            this.filteredVisits = [...this.visits];
         } else {
-            this.filteredPatients = this.patients.filter(patient => 
-                patient.firstName.toLowerCase().includes(searchTerm) ||
-                patient.lastName.toLowerCase().includes(searchTerm) ||
-                patient.phone.includes(searchTerm) ||
-                (patient.email && patient.email.toLowerCase().includes(searchTerm))
+            this.filteredVisits = this.visits.filter(visit => 
+                visit.patientName.toLowerCase().includes(searchTerm) ||
+                visit.fileNumber.toLowerCase().includes(searchTerm) ||
+                visit.procedure.toLowerCase().includes(searchTerm)
             );
         }
         
-        this.renderPatients();
+        this.renderVisits();
     }
 
     handleFilter() {
         const statusFilter = document.getElementById('statusFilter').value;
         const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
         
-        this.filteredPatients = this.patients.filter(patient => {
+        this.filteredVisits = this.visits.filter(visit => {
             const matchesSearch = !searchQuery || 
-                patient.firstName.toLowerCase().includes(searchQuery) ||
-                patient.lastName.toLowerCase().includes(searchQuery) ||
-                patient.phone.includes(searchQuery) ||
-                (patient.email && patient.email.toLowerCase().includes(searchQuery));
+                visit.patientName.toLowerCase().includes(searchQuery) ||
+                visit.fileNumber.toLowerCase().includes(searchQuery) ||
+                visit.procedure.toLowerCase().includes(searchQuery);
             
-            const matchesStatus = statusFilter === 'all' || patient.status === statusFilter;
+            const matchesStatus = statusFilter === 'all' || visit.patientType === statusFilter;
             
             return matchesSearch && matchesStatus;
         });
         
-        this.renderPatients();
+        this.renderVisits();
     }
 
     handleSort() {
         const sortBy = document.getElementById('sortBy').value;
         
-        this.filteredPatients.sort((a, b) => {
+        this.filteredVisits.sort((a, b) => {
             switch (sortBy) {
                 case 'name':
-                    return (a.firstName + ' ' + a.lastName).localeCompare(b.firstName + ' ' + b.lastName);
+                    return a.patientName.localeCompare(b.patientName);
                 case 'date':
-                    return new Date(b.createdAt) - new Date(a.createdAt);
+                    return new Date(b.visitDate) - new Date(a.visitDate);
                 case 'lastVisit':
-                    if (!a.lastVisit && !b.lastVisit) return 0;
-                    if (!a.lastVisit) return 1;
-                    if (!b.lastVisit) return -1;
-                    return new Date(b.lastVisit) - new Date(a.lastVisit);
+                    return new Date(b.createdAt) - new Date(a.createdAt);
                 default:
                     return 0;
             }
         });
         
-        this.renderPatients();
+        this.renderVisits();
     }
 
-    renderPatients() {
+    renderVisits() {
         const tbody = document.getElementById('patientsTableBody');
         
-        if (this.filteredPatients.length === 0) {
+        if (this.filteredVisits.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
                         <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
-                        <p>No patients found</p>
-                        <button class="btn btn-primary" onclick="patientManager.openModal()" style="margin-top: 1rem;">
-                            <i class="fas fa-plus"></i> Add Your First Patient
+                        <p>No visit records found</p>
+                        <button class="btn btn-primary" onclick="visitManager.openModal()" style="margin-top: 1rem;">
+                            <i class="fas fa-plus"></i> Add Your First Visit Record
                         </button>
                     </td>
                 </tr>
@@ -356,46 +352,36 @@ class DentalPatientManager {
             return;
         }
 
-        tbody.innerHTML = this.filteredPatients.map(patient => {
-            const initials = this.getInitials(patient.firstName, patient.lastName);
-            const formattedPhone = this.formatPhone(patient.phone);
-            const formattedLastVisit = this.formatDate(patient.lastVisit);
-            const formattedNextAppointment = this.formatDate(patient.nextAppointment);
+        tbody.innerHTML = this.filteredVisits.map(visit => {
+            const formattedVisitDate = this.formatDate(visit.visitDate);
+            const formattedFinalPrice = this.formatCurrency(visit.finalPrice);
 
             return `
                 <tr>
+                    <td>${formattedVisitDate}</td>
                     <td>
-                        <div class="patient-info">
-                            <div class="patient-avatar">${initials}</div>
-                            <div class="patient-details">
-                                <h4>${patient.firstName} ${patient.lastName}</h4>
-                                <p>${this.calculateAge(patient.dateOfBirth)} years old</p>
-                            </div>
+                        <div class="patient-details">
+                            <h4>${visit.patientName}</h4>
                         </div>
                     </td>
+                    <td>${visit.fileNumber}</td>
                     <td>
-                        <div class="contact-info">
-                            <p><i class="fas fa-phone"></i> ${formattedPhone}</p>
-                            ${patient.email ? `<p><i class="fas fa-envelope"></i> ${patient.email}</p>` : ''}
-                        </div>
-                    </td>
-                    <td>${formattedLastVisit}</td>
-                    <td>${formattedNextAppointment}</td>
-                    <td>
-                        <span class="status-badge status-${patient.status}">
-                            <i class="fas fa-${patient.status === 'active' ? 'check-circle' : 'times-circle'}"></i>
-                            ${patient.status.charAt(0).toUpperCase() + patient.status.slice(1)}
+                        <span class="status-badge status-${visit.patientType}">
+                            <i class="fas fa-${visit.patientType === 'cash' ? 'money-bill' : 'shield-alt'}"></i>
+                            ${visit.patientType.charAt(0).toUpperCase() + visit.patientType.slice(1)}
                         </span>
                     </td>
+                    <td>${visit.procedure}</td>
+                    <td style="font-weight: 600; color: var(--primary-color);">${formattedFinalPrice}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-sm btn-primary" onclick="patientManager.viewPatientDetails('${patient.id}')" title="View Details">
+                            <button class="btn btn-sm btn-primary" onclick="visitManager.viewVisitDetails('${visit.id}')" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <button class="btn btn-sm btn-secondary" onclick="patientManager.openModal('${patient.id}')" title="Edit">
+                            <button class="btn btn-sm btn-secondary" onclick="visitManager.openModal('${visit.id}')" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="patientManager.deletePatient('${patient.id}')" title="Delete">
+                            <button class="btn btn-sm btn-danger" onclick="visitManager.deleteVisit('${visit.id}')" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -406,19 +392,19 @@ class DentalPatientManager {
     }
 
     updateStats() {
-        const totalPatients = this.patients.length;
-        const activePatients = this.patients.filter(p => p.status === 'active').length;
+        const totalVisits = this.visits.length;
         const today = new Date().toISOString().split('T')[0];
-        const todayAppointments = this.patients.filter(p => p.nextAppointment === today).length;
-        const pendingAppointments = this.patients.filter(p => p.nextAppointment && p.nextAppointment > today).length;
+        const todayVisits = this.visits.filter(v => v.visitDate === today).length;
+        const cashPatients = this.visits.filter(v => v.patientType === 'cash').length;
+        const insurancePatients = this.visits.filter(v => v.patientType === 'insurance').length;
         
-        // Simulate monthly revenue (in a real app, this would come from actual appointment data)
-        const monthlyRevenue = totalPatients * 150; // Average $150 per patient
+        // Calculate total revenue
+        const totalRevenue = this.visits.reduce((sum, visit) => sum + visit.finalPrice, 0);
 
-        document.getElementById('totalPatients').textContent = totalPatients;
-        document.getElementById('todayAppointments').textContent = todayAppointments;
-        document.getElementById('pendingAppointments').textContent = pendingAppointments;
-        document.getElementById('monthlyRevenue').textContent = `$${monthlyRevenue.toLocaleString()}`;
+        document.getElementById('totalPatients').textContent = totalVisits;
+        document.getElementById('todayAppointments').textContent = todayVisits;
+        document.getElementById('pendingAppointments').textContent = cashPatients;
+        document.getElementById('monthlyRevenue').textContent = this.formatCurrency(totalRevenue);
     }
 
     showToast(message, type = 'success') {
@@ -444,70 +430,61 @@ class DentalPatientManager {
     }
 
     saveToLocalStorage() {
-        localStorage.setItem('dentalPatients', JSON.stringify(this.patients));
+        localStorage.setItem('dentalVisits', JSON.stringify(this.visits));
     }
 
     loadSampleData() {
-        if (this.patients.length === 0) {
-            const samplePatients = [
+        if (this.visits.length === 0) {
+            const sampleVisits = [
                 {
                     id: this.generateId(),
-                    firstName: 'John',
-                    lastName: 'Smith',
-                    dateOfBirth: '1985-03-15',
-                    phone: '555-0123',
-                    email: 'john.smith@email.com',
-                    address: '123 Main St, Anytown, CA 90210',
-                    medicalHistory: 'No known allergies. Regular dental checkups.',
-                    insuranceProvider: 'Blue Cross Blue Shield',
-                    insuranceNumber: 'BCBS123456789',
-                    status: 'active',
-                    createdAt: '2024-01-15T10:30:00.000Z',
-                    lastVisit: '2024-02-15',
-                    nextAppointment: '2024-05-15'
+                    visitDate: '2024-01-15',
+                    patientName: 'John Smith',
+                    fileNumber: 'P001',
+                    patientType: 'cash',
+                    procedure: 'Dental Cleaning',
+                    price: 150.00,
+                    discount: 0.00,
+                    finalPrice: 150.00,
+                    notes: 'Regular cleaning, no issues found.',
+                    createdAt: '2024-01-15T10:30:00.000Z'
                 },
                 {
                     id: this.generateId(),
-                    firstName: 'Sarah',
-                    lastName: 'Johnson',
-                    dateOfBirth: '1992-07-22',
-                    phone: '555-0456',
-                    email: 'sarah.j@email.com',
-                    address: '456 Oak Ave, Somewhere, CA 90211',
-                    medicalHistory: 'Sensitive to cold temperatures. Prefers warm water for cleaning.',
-                    insuranceProvider: 'Aetna',
-                    insuranceNumber: 'AET789012345',
-                    status: 'active',
-                    createdAt: '2024-01-20T14:15:00.000Z',
-                    lastVisit: '2024-03-01',
-                    nextAppointment: '2024-06-01'
+                    visitDate: '2024-01-20',
+                    patientName: 'Sarah Johnson',
+                    fileNumber: 'P002',
+                    patientType: 'insurance',
+                    procedure: 'Root Canal Treatment',
+                    price: 1200.00,
+                    discount: 100.00,
+                    finalPrice: 1100.00,
+                    notes: 'Patient experienced sensitivity. Root canal completed successfully.',
+                    createdAt: '2024-01-20T14:15:00.000Z'
                 },
                 {
                     id: this.generateId(),
-                    firstName: 'Michael',
-                    lastName: 'Davis',
-                    dateOfBirth: '1978-11-08',
-                    phone: '555-0789',
-                    email: 'michael.davis@email.com',
-                    address: '789 Pine Rd, Elsewhere, CA 90212',
-                    medicalHistory: 'History of gum disease. Requires regular deep cleaning.',
-                    insuranceProvider: 'Cigna',
-                    insuranceNumber: 'CIG456789012',
-                    status: 'active',
-                    createdAt: '2024-02-01T09:45:00.000Z',
-                    lastVisit: '2024-03-20',
-                    nextAppointment: '2024-04-20'
+                    visitDate: '2024-02-01',
+                    patientName: 'Michael Davis',
+                    fileNumber: 'P003',
+                    patientType: 'cash',
+                    procedure: 'Tooth Extraction',
+                    price: 300.00,
+                    discount: 50.00,
+                    finalPrice: 250.00,
+                    notes: 'Wisdom tooth extraction. Patient recovered well.',
+                    createdAt: '2024-02-01T09:45:00.000Z'
                 }
             ];
 
-            this.patients = samplePatients;
-            this.filteredPatients = [...this.patients];
+            this.visits = sampleVisits;
+            this.filteredVisits = [...this.visits];
             this.saveToLocalStorage();
-            this.renderPatients();
+            this.renderVisits();
             this.updateStats();
         }
     }
 }
 
 // Initialize the application
-const patientManager = new DentalPatientManager(); 
+const visitManager = new DentalVisitManager(); 
